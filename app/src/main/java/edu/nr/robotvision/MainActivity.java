@@ -2,12 +2,10 @@ package edu.nr.robotvision;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.SurfaceView;
-import android.view.View;
 import android.view.WindowManager;
 import android.widget.Toast;
 
@@ -18,17 +16,14 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
-import org.opencv.core.MatOfInt;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
-import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import java.util.ArrayList;
-import java.util.List;
 
 public class MainActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2
 {
@@ -92,10 +87,6 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                 {
                     OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_6, this, mLoaderCallback);
                 }
-                else
-                {
-                    //TODO do something if user denied permission
-                }
                 return;
             }
         }
@@ -148,8 +139,6 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     Scalar low = new Scalar(H_low, L_low, S_low);
     Scalar high = new Scalar(H_high, L_high, S_high);
 
-    int count = 0;
-
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame)
     {
@@ -180,16 +169,6 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         ArrayList<MatOfPoint> contours = new ArrayList<>();
 
         Imgproc.findContours(canny_output, contours, hierarchy, Imgproc.CV_RETR_TREE, Imgproc.CV_CHAIN_APPROX_SIMPLE, new Point(0, 0));
-
-        ArrayList<MatOfInt> hulls = new ArrayList<>();
-
-        for(int i = 0; i < contours.size(); i++ ) {
-            MatOfInt mat = new MatOfInt();
-            Imgproc.convexHull(contours.get(i), mat);
-            hulls.add(mat);
-        }
-
-
 
         // Approximate the convex hulls with polygons
         // This reduces the number of edges and makes the contours
@@ -222,7 +201,6 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         }
 
         int minArea = 1000; //Minimum area for the detected rectangle to have
-        final int WIDTH = 1280; //Width of the screen
 
         ArrayList<MatOfPoint> prunedPoly = new ArrayList<>();
         if (poly.size() > 0) {
