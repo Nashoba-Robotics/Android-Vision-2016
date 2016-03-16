@@ -4,7 +4,6 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.hardware.Camera;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.SurfaceView;
@@ -218,7 +217,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         ArrayList<MatOfPoint> poly = new ArrayList<>();
         for(MatOfPoint2f mat : poly2f) {
             MatOfPoint contour = new MatOfPoint();
-            mat.convertTo(contour, CvType.CV_32FC1);
+            mat.convertTo(contour, CvType.CV_32F);
             poly.add(contour);
         }
 
@@ -230,9 +229,16 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
             int size = minArea;
             int largest = -1;
             for (int i = 0; i < poly.size(); i++) {
-                //The next line causes it to crash without an error message
-                Rect bRect = Imgproc.boundingRect(poly.get(i));
-                /*// Remove polygons that are too small
+                MatOfPoint points = poly.get(i);
+                System.out.println("Depth == " + points.depth());
+                System.out.println("CvType.CV_32F == " + CvType.CV_32F);
+                System.out.println("Vector(2) == " + points.checkVector(2));
+                System.out.println((points.checkVector(2) >= 0 && (points.depth() == CvType.CV_32F || points.depth() == CvType.CV_32S)));
+                //The next line causes it to crash with
+                //OpenCV Error: Assertion failed (points.checkVector(2) >= 0 && (points.depth() == CV_32F || points.depth() == CV_32S)) in cv::Rect cv::boundingRect(InputArray), file /hdd2/buildbot/slaves/slave_ardbeg1/50-SDK/opencv/modules/imgproc/src/contours.cpp, line 1895
+                //This is despite the fact that all those things it is asserting all return true
+                Rect bRect = Imgproc.boundingRect(points);
+                /*/// Remove polygons that are too small
                 if (bRect.width * bRect.height > minArea) {
                     prunedPoly.add(poly.get(i));
                     if (bRect.width * bRect.height > size) {
