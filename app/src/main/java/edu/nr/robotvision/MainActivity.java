@@ -2,11 +2,9 @@ package edu.nr.robotvision;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.SurfaceView;
@@ -19,10 +17,19 @@ import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfInt;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2
 {
@@ -45,14 +52,16 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         camView.setVisibility(SurfaceView.VISIBLE);
         camView.setCvCameraViewListener(this);
 
-        if (ContextCompat.checkSelfPermission(this,
-                Manifest.permission.READ_CONTACTS)
+        if (this.checkSelfPermission(
+                Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED)
         {
 
-                ActivityCompat.requestPermissions(this,
+                this.requestPermissions(
                         new String[]{Manifest.permission.CAMERA},
                         PERMISSION_REQUEST_ALLOW_CAMERA);
+        } else {
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_6, this, mLoaderCallback);
         }
     }
 
@@ -146,30 +155,101 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame)
     {
         Mat rgba = inputFrame.rgba();
-        Mat rgbaTemp = rgba.clone();
+        int dilationSize = 2;
+        Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2 * dilationSize + 1, 2 * dilationSize + 1), new Point(dilationSize, dilationSize));
 
-//        Mat rotationMatrix = Imgproc.getRotationMatrix2D(new Point(rgba.cols()/2.0, rgba.rows()/2.0), 180, 1.0);
-//
-//        Imgproc.warpAffine(rgba, rgbaTemp, rotationMatrix, rgba.size());
-//        rgba.release();
-//        rotationMatrix.release();
 
-        Imgproc.cvtColor(rgba, rgbaTemp, Imgproc.COLOR_BGR2HLS);
-        rgba = rgbaTemp.clone();
+        //Core.transpose(rgba, rgba);
+        Core.flip(rgba, rgba, 0);
+        Core.flip(rgba, rgba, 1);
 
-        Core.inRange(rgba, low, high, rgbaTemp);
-        rgba = rgbaTemp.clone();
 
-//        if(count > 50)
-//        {
-//            System.gc();
-//            Log.d(MainActivity.class.getName(), "Forcing Garbage Collection");
-//            count = 0;
-//        }
-//        count++;
+        Imgproc.cvtColor(rgba, rgba, Imgproc.COLOR_BGR2HLS);
 
+        Core.inRange(rgba, low, high, rgba);
+
+        Imgproc.dilate(rgba, rgba, dilateElement);
+
+        Mat canny_output = new Mat();
+
+        int thresh = 200;
+
+        Imgproc.Canny(rgba, canny_output, thresh, thresh * 2);
+
+        Mat hierarchy = new Mat();
+
+        ArrayList<MatOfPoint> contours = new ArrayList<>();
+
+        Imgproc.findContours(canny_output, contours, hierarchy, Imgproc.CV_RETR_TREE, Imgproc.CV_CHAIN_APPROX_SIMPLE, new Point(0, 0));
+
+        ArrayList<MatOfInt> hulls = new ArrayList<>();
+
+        for(int i = 0; i < contours.size(); i++ ) {
+            MatOfInt mat = new MatOfInt();
+            Imgproc.convexHull(contours.get(i), mat);
+            hulls.add(mat);
+        }
+
+
+
+        // Approximate the convex hulls with polygons
+        // This reduces the number of edges and makes the contours
+        // into quads
+        ArrayList<MatOfPoint2f> poly2f = new ArrayList<>();
+        int poly_epsilon = 10;
+
+        for (int i=0; i < contours.size(); i++) {
+
+            MatOfPoint2f thisContour2f = new MatOfPoint2f();
+            MatOfPoint2f approxContour2f = new MatOfPoint2f();
+
+            contours.get(i).convertTo(thisContour2f, CvType.CV_32FC2);
+
+            Imgproc.approxPolyDP(thisContour2f, approxContour2f, poly_epsilon, true);
+
+            poly2f.add(approxContour2f);
+
+            // These come out reversed, so reverse back
+            /*List<Point> polyi = poly.get(i).toList();
+            MatOfPoint2f mat = new MatOfPoint2f().fromList(polyi)
+            poly.set(i, mat);*/
+        }
+
+        ArrayList<MatOfPoint> poly = new ArrayList<>();
+        for(MatOfPoint2f mat : poly2f) {
+            MatOfPoint contour = new MatOfPoint();
+            mat.convertTo(contour, CvType.CV_32FC1);
+            poly.add(contour);
+        }
+
+        int minArea = 1000; //Minimum area for the detected rectangle to have
+        final int WIDTH = 1280; //Width of the screen
+
+        ArrayList<MatOfPoint> prunedPoly = new ArrayList<>();
+        if (poly.size() > 0) {
+            int size = minArea;
+            int largest = -1;
+            for (int i = 0; i < poly.size(); i++) {
+                //The next line causes it to crash without an error message
+                Rect bRect = Imgproc.boundingRect(poly.get(i));
+                /*// Remove polygons that are too small
+                if (bRect.width * bRect.height > minArea) {
+                    prunedPoly.add(poly.get(i));
+                    if (bRect.width * bRect.height > size) {
+                        size = bRect.width * bRect.height;
+                        largest = prunedPoly.size() - 1;
+                    }
+                }*/
+            }
+            /*//There are no targest bigger than the minArea
+            if (largest == -1)
+                return rgba;
+            MatOfPoint goodPoly = prunedPoly.get(largest);
+            // Output the final image
+            for (int i = 0; i < prunedPoly.size(); i++) {
+                Imgproc.drawContours(rgba, prunedPoly, i, new Scalar(0, 0, 255));
+            }*/
+        }
         return rgba;
     }
 }
-
-
