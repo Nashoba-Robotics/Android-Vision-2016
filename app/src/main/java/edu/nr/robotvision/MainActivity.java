@@ -237,7 +237,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                 //The next line causes it to crash with
                 //OpenCV Error: Assertion failed (points.checkVector(2) >= 0 && (points.depth() == CV_32F || points.depth() == CV_32S)) in cv::Rect cv::boundingRect(InputArray), file /hdd2/buildbot/slaves/slave_ardbeg1/50-SDK/opencv/modules/imgproc/src/contours.cpp, line 1895
                 //This is despite the fact that all those things it is asserting all return true
-                Rect bRect = Imgproc.boundingRect(points);
+                //Rect bRect = Imgproc.boundingRect(points);
                 /*/// Remove polygons that are too small
                 if (bRect.width * bRect.height > minArea) {
                     prunedPoly.add(poly.get(i));
@@ -256,6 +256,6 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                 Imgproc.drawContours(rgba, prunedPoly, i, new Scalar(0, 0, 255));
             }*/
         }
-        return rgba;
+        return inputFrame.rgba();
     }
 }

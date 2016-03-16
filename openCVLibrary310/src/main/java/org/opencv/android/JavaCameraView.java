@@ -167,8 +167,14 @@ public class JavaCameraView extends CameraBridgeViewBase implements PreviewCallb
                         params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
                     }
 
+                    params.setAutoExposureLock(true);
+
+                    //TODO: figure out how much exposure we need
+                    params.setExposureCompensation(-20);
+
                     mCamera.setParameters(params);
                     params = mCamera.getParameters();
+
                     previewFormat = params.getPreviewFormat();
 
                     mFrameWidth = params.getPreviewSize().width;
