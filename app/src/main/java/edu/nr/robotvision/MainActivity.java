@@ -19,11 +19,13 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2
 {
@@ -87,6 +89,10 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                 {
                     OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_6, this, mLoaderCallback);
                 }
+                else
+                {
+                    //TODO do something if user denied permission
+                }
                 return;
             }
         }
@@ -131,7 +137,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
     //HLS Thresholding
     int H_low = 60;
-    int H_high = 106;//90;
+    int H_high = 90;
     int S_high = 255;
     int S_low = 78;
     int L_low = 50;
@@ -170,70 +176,67 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
         Imgproc.findContours(canny_output, contours, hierarchy, Imgproc.CV_RETR_TREE, Imgproc.CV_CHAIN_APPROX_SIMPLE, new Point(0, 0));
 
-        // Approximate the convex hulls with polygons
-        // This reduces the number of edges and makes the contours
-        // into quads
-        ArrayList<MatOfPoint2f> poly2f = new ArrayList<>();
-        int poly_epsilon = 10;
-
-        for (int i=0; i < contours.size(); i++) {
-
-            MatOfPoint2f thisContour2f = new MatOfPoint2f();
-            MatOfPoint2f approxContour2f = new MatOfPoint2f();
-
-            contours.get(i).convertTo(thisContour2f, CvType.CV_32FC2);
-
-            Imgproc.approxPolyDP(thisContour2f, approxContour2f, poly_epsilon, true);
-
-            poly2f.add(approxContour2f);
-
-            // These come out reversed, so reverse back
-            /*List<Point> polyi = poly.get(i).toList();
-            MatOfPoint2f mat = new MatOfPoint2f().fromList(polyi)
-            poly.set(i, mat);*/
-        }
-
-        ArrayList<MatOfPoint> poly = new ArrayList<>();
-        for(MatOfPoint2f mat : poly2f) {
-            MatOfPoint contour = new MatOfPoint();
-            mat.convertTo(contour, CvType.CV_32F);
-            poly.add(contour);
-        }
+        ArrayList<MatOfPoint> poly = contours;
 
         int minArea = 1000; //Minimum area for the detected rectangle to have
+        final int WIDTH = 1280; //Width of the screen
 
         ArrayList<MatOfPoint> prunedPoly = new ArrayList<>();
         if (poly.size() > 0) {
             int size = minArea;
             int largest = -1;
             for (int i = 0; i < poly.size(); i++) {
-                MatOfPoint points = poly.get(i);
-                System.out.println("Depth == " + points.depth());
-                System.out.println("CvType.CV_32F == " + CvType.CV_32F);
-                System.out.println("Vector(2) == " + points.checkVector(2));
-                System.out.println((points.checkVector(2) >= 0 && (points.depth() == CvType.CV_32F || points.depth() == CvType.CV_32S)));
-                //The next line causes it to crash with
-                //OpenCV Error: Assertion failed (points.checkVector(2) >= 0 && (points.depth() == CV_32F || points.depth() == CV_32S)) in cv::Rect cv::boundingRect(InputArray), file /hdd2/buildbot/slaves/slave_ardbeg1/50-SDK/opencv/modules/imgproc/src/contours.cpp, line 1895
-                //This is despite the fact that all those things it is asserting all return true
-                //Rect bRect = Imgproc.boundingRect(points);
-                /*/// Remove polygons that are too small
-                if (bRect.width * bRect.height > minArea) {
+                Rect bRect = Imgproc.boundingRect(poly.get(i));
+                /// Remove polygons that are too small
+
+                if (Math.abs(bRect.width * bRect.height) > minArea) {
                     prunedPoly.add(poly.get(i));
                     if (bRect.width * bRect.height > size) {
                         size = bRect.width * bRect.height;
                         largest = prunedPoly.size() - 1;
                     }
-                }*/
+                }
             }
-            /*//There are no targest bigger than the minArea
+            //There are no targest bigger than the minArea
             if (largest == -1)
                 return rgba;
+
             MatOfPoint goodPoly = prunedPoly.get(largest);
+
+            //Determine the topLeft corner x
+            final double tlcornerX = Math.min(Math.min(goodPoly.toArray()[0].x, goodPoly.toArray()[1].x), Math.min(goodPoly.toArray()[2].x, goodPoly.toArray()[3].x));
+            final double tlcornerY = Math.min(Math.min(goodPoly.toArray()[0].y, goodPoly.toArray()[1].y), Math.min(goodPoly.toArray()[2].y, goodPoly.toArray()[3].y));
+
+            //Determine the width and height
+            final double x1 = (Math.abs(goodPoly.toArray()[0].x - goodPoly.toArray()[1].x) + Math.abs(goodPoly.toArray()[2].x - goodPoly.toArray()[3].x))/2;
+            final double x2 = (Math.abs(goodPoly.toArray()[1].x - goodPoly.toArray()[2].x) + Math.abs(goodPoly.toArray()[3].x - goodPoly.toArray()[0].x))/2;
+            final double width = Math.max(x1, x2);
+
+            final double y1 = (Math.abs(goodPoly.toArray()[0].y - goodPoly.toArray()[1].y) + Math.abs(goodPoly.toArray()[2].y - goodPoly.toArray()[3].y))/2;
+            final double y2 = (Math.abs(goodPoly.toArray()[1].y - goodPoly.toArray()[2].y) + Math.abs(goodPoly.toArray()[3].y - goodPoly.toArray()[0].y))/2;
+            final double height = Math.max(y1, y2);
+
+
+            final double xCenterOfTarget = width/2.0 + tlcornerX;
+            final double yCenterOfTarget = height/2.0 + tlcornerY;
+            final double leftRightPixels = xCenterOfTarget - WIDTH/2.0;
+            final int FOVH = 60;
+            double turn = (FOVH/(1.0 * WIDTH)) * leftRightPixels ;
+            final double distance = (height-128)/(-3.7);
+
+            turn = turn + Math.asin(11 / 16 / distance);
+            System.out.println("Distance: " + String.valueOf(distance));
+            //Imgproc.putText(rgba,String.valueOf(distance),new Point(150,150),0,1,new Scalar(255,255,0),1,8,true);
             // Output the final image
+            /*Mat output = inputFrame.rgba();
+            Core.flip(output, output, 0);
+            Core.flip(output, output, 1);
+
             for (int i = 0; i < prunedPoly.size(); i++) {
-                Imgproc.drawContours(rgba, prunedPoly, i, new Scalar(0, 0, 255));
-            }*/
+                Imgproc.drawContours(output, prunedPoly, i, new Scalar(0, 0, 255),5,8,hierarchy,0, new Point(0,0));
+            }
+            return output;*/
         }
-        return inputFrame.rgba();
+        return rgba;
     }
 }
