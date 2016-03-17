@@ -17,6 +17,7 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfInt;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
@@ -176,13 +177,65 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
         Imgproc.findContours(canny_output, contours, hierarchy, Imgproc.CV_RETR_TREE, Imgproc.CV_CHAIN_APPROX_SIMPLE, new Point(0, 0));
 
-        ArrayList<MatOfPoint> poly = contours;
+        // Find the convex hull
+        ArrayList<MatOfInt> hull = new ArrayList<>();
+        for(int i=0; i < contours.size(); i++){
+            hull.add(new MatOfInt());
+        }
+        for(int i=0; i < contours.size(); i++){
+            Imgproc.convexHull(contours.get(i), hull.get(i));
+        }
 
-        int minArea = 1000; //Minimum area for the detected rectangle to have
+        // Convert MatOfInt to MatOfPoint for drawing convex hull
+
+        // Loop over all contours
+        ArrayList<Point[]> hullpoints = new ArrayList<>();
+        for(int i=0; i < hull.size(); i++){
+            Point[] points = new Point[hull.get(i).rows()];
+
+            // Loop over all points that need to be hulled in current contour
+            for(int j=0; j < hull.get(i).rows(); j++){
+                int index = (int)hull.get(i).get(j, 0)[0];
+                points[j] = new Point(contours.get(i).get(index, 0)[0], contours.get(i).get(index, 0)[1]);
+            }
+
+            hullpoints.add(points);
+        }
+
+        // Convert Point arrays into MatOfPoint2f
+        ArrayList<MatOfPoint2f> hullmop = new ArrayList<>();
+        for(int i=0; i < hullpoints.size(); i++){
+            MatOfPoint2f mop = new MatOfPoint2f();
+            mop.fromArray(hullpoints.get(i));
+            hullmop.add(mop);
+        }
+
+        // Approximate the convex hulls with polygons
+        // This reduces the number of edges and makes the contours
+        // into quads
+        ArrayList<MatOfPoint2f> poly2f = new ArrayList<>();
+        for(int i=0; i < hullmop.size(); i++){
+            poly2f.add(new MatOfPoint2f());
+        }
+        final int poly_epsilon = 10;
+        for (int i=0; i < hullmop.size(); i++) {
+            Imgproc.approxPolyDP(hullmop.get(i), poly2f.get(i), poly_epsilon, true);
+        }
+
+        ArrayList<MatOfPoint> poly = new ArrayList<>();
+        // Convert MatOfPoint2f into MatOfPoint
+        for(int i=0; i < poly2f.size(); i++) {
+            MatOfPoint mop = new MatOfPoint();
+            mop.fromArray(poly2f.get(i).toArray());
+            poly.add(mop);
+        }
+
+        final int minArea = 1000; //Minimum area for the detected rectangle to have
         final int WIDTH = 1280; //Width of the screen
 
         ArrayList<MatOfPoint> prunedPoly = new ArrayList<>();
         if (poly.size() > 0) {
+
             int size = minArea;
             int largest = -1;
             for (int i = 0; i < poly.size(); i++) {
@@ -197,12 +250,15 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                     }
                 }
             }
-            //There are no targest bigger than the minArea
+            //There are no targets bigger than the minArea
             if (largest == -1)
                 return rgba;
 
             MatOfPoint goodPoly = prunedPoly.get(largest);
-
+            if(goodPoly.toArray().length < 4) {
+                System.out.println("Good poly issue");
+                return rgba;
+            }
             //Determine the topLeft corner x
             final double tlcornerX = Math.min(Math.min(goodPoly.toArray()[0].x, goodPoly.toArray()[1].x), Math.min(goodPoly.toArray()[2].x, goodPoly.toArray()[3].x));
             final double tlcornerY = Math.min(Math.min(goodPoly.toArray()[0].y, goodPoly.toArray()[1].y), Math.min(goodPoly.toArray()[2].y, goodPoly.toArray()[3].y));
@@ -225,17 +281,17 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
             final double distance = (height-128)/(-3.7);
 
             turn = turn + Math.asin(11 / 16 / distance);
-            System.out.println("Distance: " + String.valueOf(distance));
+            System.out.println("Height: " + height + ", size: " + size + ", turn: " + turn);
             //Imgproc.putText(rgba,String.valueOf(distance),new Point(150,150),0,1,new Scalar(255,255,0),1,8,true);
             // Output the final image
-            /*Mat output = inputFrame.rgba();
+            Mat output = inputFrame.rgba();
             Core.flip(output, output, 0);
             Core.flip(output, output, 1);
 
             for (int i = 0; i < prunedPoly.size(); i++) {
                 Imgproc.drawContours(output, prunedPoly, i, new Scalar(0, 0, 255),5,8,hierarchy,0, new Point(0,0));
             }
-            return output;*/
+            return output;
         }
         return rgba;
     }

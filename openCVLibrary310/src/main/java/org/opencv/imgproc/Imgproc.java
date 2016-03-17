@@ -1332,7 +1332,6 @@ public class Imgproc {
         return;
     }
 
-
     //
     // C++:  void arrowedLine(Mat& img, Point pt1, Point pt2, Scalar color, int thickness = 1, int line_type = 8, int shift = 0, double tipLength = 0.1)
     //
