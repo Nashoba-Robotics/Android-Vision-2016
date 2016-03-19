@@ -2,7 +2,14 @@ package edu.nr.robotvision;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
 import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.hardware.usb.UsbAccessory;
+import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.SurfaceView;
@@ -28,10 +35,24 @@ import org.opencv.imgproc.Imgproc;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2
+public class MainActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2, SensorEventListener
 {
     private CameraBridgeViewBase camView;
     private final int PERMISSION_REQUEST_ALLOW_CAMERA = 1;
+
+    UsbManager manager;
+
+
+    //Angle stuff:
+    private SensorManager mSensorManager;
+    private Sensor gravitySensor;
+
+    double gravity[] = {0,0,0};
+
+    boolean initialized = false;
+
+    double camera_angle = 0; // in radians
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -43,6 +64,16 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
         //Inflates the views from the xml file
         setContentView(R.layout.activity_main);
+
+
+        //Setup roboRIO comm
+        manager = (UsbManager) getSystemService(Context.USB_SERVICE);
+
+        UsbAccessory accessory = (UsbAccessory) getIntent().getParcelableExtra(UsbManager.EXTRA_ACCESSORY);
+
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        gravitySensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
+        mSensorManager.registerListener(this, gravitySensor, 10000);
 
 
         camView = (CameraBridgeViewBase) findViewById(R.id.HelloOpenCvView);
@@ -104,6 +135,9 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     public void onResume()
     {
         super.onResume();
+        if(camView != null)
+            camView.enableView();
+
     }
 
     @Override
@@ -113,6 +147,8 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         if(camView != null)
             camView.disableView();
         Toast.makeText(this, "ON PAUSE", Toast.LENGTH_SHORT).show();
+
+        //Maybe send a message to the roboRIO here
     }
 
     @Override
@@ -137,8 +173,8 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     }
 
     //HLS Thresholding
-    int H_low = 60;
-    int H_high = 90;
+    int H_low = 55;
+    int H_high = 75;
     int S_high = 255;
     int S_low = 78;
     int L_low = 50;
@@ -149,6 +185,14 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame)
     {
+
+        boolean waitingForRobotConnection = true;
+        System.out.println("USB Devices: " + manager.getAccessoryList());
+        //Set waitingForRobotConnection to be false once we connect;
+        if(manager.getAccessoryList() != null) {
+            waitingForRobotConnection = false;
+        }
+
         Mat rgba = inputFrame.rgba();
         int dilationSize = 2;
         Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2 * dilationSize + 1, 2 * dilationSize + 1), new Point(dilationSize, dilationSize));
@@ -251,12 +295,37 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                 }
             }
             //There are no targets bigger than the minArea
-            if (largest == -1)
+            if (largest == -1) {
+
+
+                if(waitingForRobotConnection) {
+                    Imgproc.putText(rgba, "No robot comm", new Point(150, 450), 0, 3, new Scalar(255, 0, 0), 5, 8, true);
+                } else {
+                    Imgproc.putText(rgba, "Comm: " + manager.getAccessoryList(), new Point(150, 450), 0, 3, new Scalar(255, 0, 0), 5, 8, true);
+                }
+
+                Imgproc.putText(rgba, "UD tilt: " + String.valueOf(camera_angle * 180 / Math.PI), new Point(150, 100), 0, 2, new Scalar(255, 0, 0), 5, 8, true);
+
+                Core.flip(rgba, rgba, 0);
+
                 return rgba;
+            }
 
             MatOfPoint goodPoly = prunedPoly.get(largest);
             if(goodPoly.toArray().length < 4) {
                 System.out.println("Good poly issue");
+
+                if(waitingForRobotConnection) {
+                    Imgproc.putText(rgba, "No robot comm", new Point(150, 450), 0, 3, new Scalar(255, 0, 0), 5, 8, true);
+                } else {
+                    Imgproc.putText(rgba, "Comm: " + manager.getAccessoryList(), new Point(150, 450), 0, 3, new Scalar(255, 0, 0), 5, 8, true);
+                }
+
+                Imgproc.putText(rgba, "UD tilt: " + String.valueOf(camera_angle * 180 / Math.PI), new Point(150, 100), 0, 2, new Scalar(255, 0, 0), 5, 8, true);
+
+
+                Core.flip(rgba, rgba, 0);
+
                 return rgba;
             }
             //Determine the topLeft corner x
@@ -272,27 +341,71 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
             final double y2 = (Math.abs(goodPoly.toArray()[1].y - goodPoly.toArray()[2].y) + Math.abs(goodPoly.toArray()[3].y - goodPoly.toArray()[0].y))/2;
             final double height = Math.max(y1, y2);
 
+            final int totalScreenHeight = 960; //Total screen height in pixels
 
             final double xCenterOfTarget = width/2.0 + tlcornerX;
             final double yCenterOfTarget = height/2.0 + tlcornerY;
+            final double heightFromBottom = totalScreenHeight-yCenterOfTarget;
             final double leftRightPixels = xCenterOfTarget - WIDTH/2.0;
-            final int FOVH = 60;
-            double turn = (FOVH/(1.0 * WIDTH)) * leftRightPixels ;
-            final double distance = (height-128)/(-3.7);
-
-            turn = turn + Math.asin(11 / 16 / distance);
-            System.out.println("Height: " + height + ", size: " + size + ", turn: " + turn);
-            //Imgproc.putText(rgba,String.valueOf(distance),new Point(150,150),0,1,new Scalar(255,255,0),1,8,true);
+            final int FOVW = 66;
+            double turn = (FOVW/WIDTH) * leftRightPixels;
+            final double target_height = 23.625; // height from camera to middle of target in inches
+            final double FOVH = 49.5 * (Math.PI/180); //horizontal field of view in radians
+            //final double distance = (-target_height*totalScreenHeight*Math.cos(2*camera_angle) - target_height*totalScreenHeight*Math.cos(FOVH))/(-totalScreenHeight*Math.sin(2*camera_angle) - 2*heightFromBottom*Math.sin(FOVH) + totalScreenHeight*Math.sin(FOVH));
+            //final double distance = (target_height*totalScreenHeight*Math.cos(camera_angle)*Math.cos(camera_angle)/(Math.tan(FOVH/2)))/((totalScreenHeight * Math.sin(camera_angle) * Math.cos(camera_angle)/Math.tan(FOVH/2)) + 2*(heightFromBottom - totalScreenHeight/2));
+            //final double distance = (target_height * totalScreenHeight)/(2.0 * (heightFromBottom - totalScreenHeight/2.0) * Math.tan((FOVH/2.0)));
+            //Log.d("MainActivity", "FOVH: " + FOVH + " p: " + (heightFromBottom - totalScreenHeight/2.0));
             // Output the final image
             Mat output = inputFrame.rgba();
-            Core.flip(output, output, 0);
             Core.flip(output, output, 1);
+            /*if(waitingForRobotConnection)
+                Imgproc.putText(output, "No robot comm", new Point(150, 450), 0, 3, new Scalar(255, 0, 0), 5, 8, true);*/
+
+            Imgproc.putText(output, String.valueOf(heightFromBottom), new Point(150, 300), 0, 3, new Scalar(255, 0, 0), 5, 8, true);
+            Imgproc.putText(output, "LR turn: " + String.valueOf(turn), new Point(150, 200), 0, 2, new Scalar(255, 0, 0), 5, 8, true);
+            Imgproc.putText(output, "UD tilt: " + String.valueOf(camera_angle * 180 / Math.PI), new Point(150, 100), 0, 2, new Scalar(255, 0, 0), 5, 8, true);
+            Core.flip(output, output, 0);
 
             for (int i = 0; i < prunedPoly.size(); i++) {
                 Imgproc.drawContours(output, prunedPoly, i, new Scalar(0, 0, 255),5,8,hierarchy,0, new Point(0,0));
             }
             return output;
         }
+        if(waitingForRobotConnection) {
+            Imgproc.putText(rgba, "No robot comm", new Point(150, 450), 0, 3, new Scalar(255, 0, 0), 5, 8, true);
+        } else {
+            Imgproc.putText(rgba, "Comm: " + manager.getAccessoryList(), new Point(150, 450), 0, 3, new Scalar(255, 0, 0), 5, 8, true);
+        }
+
+        Imgproc.putText(rgba, "UD tilt: " + String.valueOf(camera_angle * 180 / Math.PI), new Point(150, 100), 0, 2, new Scalar(255, 0, 0), 5, 8, true);
+
+        Core.flip(rgba, rgba, 0);
         return rgba;
+    }
+
+    public void onSensorChanged(SensorEvent event){
+        // In this, alpha is calculated as t / (t + dT),
+        // where t is the low-pass filter's time-constant and
+        // dT is the event delivery rate.
+
+        double alpha = 0.8;
+
+        if(!initialized) {
+            alpha = 0;
+            initialized = true;
+        }
+
+        // Isolate the force of gravity with the low-pass filter.
+        gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0];
+        gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1];
+        gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2];
+
+        camera_angle = -Math.atan2(gravity[2], gravity[0]);
+
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        Log.e("MainActivity", "YOOOO!!!! ACCURACY CHANGED. Accuracy: " + accuracy );
     }
 }
