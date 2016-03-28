@@ -49,8 +49,12 @@ public class Server implements Runnable {
                     serverSocket = new ServerSocket(1768);
                 } catch (IOException ex) {
                     Log.e("Server", "Couldn't connect to port");
-                    long current = System.currentTimeMillis();
-                    while(System.currentTimeMillis() < current + 1000) {}
+                    try {
+                        this.wait(1000);
+                    }
+                    catch (InterruptedException ei) {
+                        ei.printStackTrace();
+                    }
                 } catch (SecurityException ex) {
                     Log.e("Server", "Server initialization was blocked");
                 }
