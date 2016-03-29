@@ -17,9 +17,12 @@ public class Server implements Runnable {
     char delimiter = ':'; //The information is split distance:beta_h
     ServerSocket serverSocket;
 
+    double old_distance = MainActivity.distance;
+    double old_turn = MainActivity.turn;
+
     public Server() {
         try {
-            serverSocket = new ServerSocket(1768);
+            serverSocket = new ServerSocket(5432);
         } catch (IOException e) {
             Log.e("Server", "Couldn't connect to port");
         } catch (SecurityException e) {
@@ -34,19 +37,20 @@ public class Server implements Runnable {
             Socket connectionSocket;
             try {
                 connectionSocket = serverSocket.accept();
-                BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
-                DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
-
-                inFromClient.readLine();
-
-                String clientSentence = "" + MainActivity.distance + delimiter + MainActivity.turn;
-                Log.d("Server", "About to send to client" + clientSentence);
-                outToClient.writeBytes(clientSentence + '\n');
+                while(true) {
+                    DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
+                    if (old_distance != MainActivity.distance || old_turn != MainActivity.turn) {
+                        String clientSentence = "" + MainActivity.distance + delimiter + MainActivity.turn;
+                        old_distance = MainActivity.distance;
+                        old_turn = MainActivity.turn;
+                        outToClient.writeBytes(clientSentence + '\n');
+                    }
+                }
             } catch (IOException e) {
                 e.printStackTrace();
-            } catch (NullPointerException e) {
+            } catch (Exception e) {
                 try {
-                    serverSocket = new ServerSocket(1768);
+                    serverSocket = new ServerSocket(5432);
                 } catch (IOException ex) {
                     Log.e("Server", "Couldn't connect to port");
                     try {
