@@ -337,7 +337,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
             final double leftRightPixels = xCenterOfTarget - WIDTH/2.0;
             turn = ((FOVW/WIDTH) * leftRightPixels) * 180 / Math.PI; //in degrees
 
-            //distance = SOMETHING //TODO
+            distance = 4*10^(-10) x^4-1×10^(-6) x^3+0.0009 x^2-0.4078 x+78.361
 
             // Output the final image
             Mat output = inputFrame.rgba();
