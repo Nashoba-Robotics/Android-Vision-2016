@@ -336,10 +336,9 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
             final double heightFromBottom = HEIGHT-yCenterOfTarget;
             final double leftRightPixels = xCenterOfTarget - WIDTH/2.0;
             final double x = heightFromBottom;
-            distance = 0.00000001353*x*x*x*x - 0.00002052675*x*x*x + 0.01172253681*x*x - 3.03688114072*x + 316.88130254675;
             turn = ((FOVW/WIDTH) * leftRightPixels) * 180 / Math.PI; //in degrees
-            turn = -(-0.0059*heightFromBottom - 0.0985) + turn;
             //turn = 90 - Math.atan2(distance, 0.55); //0.55 is the left offset in feet
+
             // Output the final image
             Mat output = inputFrame.rgba();
             Core.flip(output, output, 1);
