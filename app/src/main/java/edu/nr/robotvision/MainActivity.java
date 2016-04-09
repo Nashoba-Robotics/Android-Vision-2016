@@ -48,12 +48,12 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     static double turn = 0;
     static double distance = 0;
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
 
+        Thread.setDefaultUncaughtExceptionHandler(new DefaultExceptionHandler(this));
 
         Log.d("MainActivity", "On create");
 
