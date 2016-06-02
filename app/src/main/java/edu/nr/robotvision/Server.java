@@ -19,6 +19,7 @@ public class Server implements Runnable {
 
     double old_distance = MainActivity.distance;
     double old_turn = MainActivity.turn;
+    long old_time = MainActivity.delta_time;
 
     public Server() {
         try {
@@ -39,10 +40,11 @@ public class Server implements Runnable {
                 connectionSocket = serverSocket.accept();
                 while(true) {
                     DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
-                    if (old_distance != MainActivity.distance || old_turn != MainActivity.turn) {
-                        String clientSentence = "" + MainActivity.distance + delimiter + MainActivity.turn;
+                    if (old_distance != MainActivity.distance || old_turn != MainActivity.turn || old_time != MainActivity.delta_time) {
+                        String clientSentence = "" + MainActivity.distance + delimiter + MainActivity.turn + ";" + MainActivity.delta_time;
                         old_distance = MainActivity.distance;
                         old_turn = MainActivity.turn;
+                        old_time = MainActivity.delta_time;
                         outToClient.writeBytes(clientSentence + '\n');
                     }
                 }

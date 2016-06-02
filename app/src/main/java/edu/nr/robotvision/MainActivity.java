@@ -47,6 +47,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
     static double turn = 0;
     static double distance = 0;
+    static long delta_time = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -172,7 +173,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     }
 
     //HLS Thresholding
-    int H_low = 55;
+    int H_low = 30;//55
     int H_high = 75;
     int S_high = 255;
     int S_low = 78;
@@ -191,6 +192,8 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame)
     {
+
+        long startTime = System.currentTimeMillis();
 
         Mat rgba = inputFrame.rgba();
         int dilationSize = 2;
@@ -339,11 +342,15 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
             turn = ((FOVW/WIDTH) * leftRightPixels) * 180 / Math.PI; //in degrees
             //turn = 90 - Math.atan2(distance, 0.55); //0.55 is the left offset in feet
 
+            turn -= -0.0106232*x + 1.4051369;
+            distance = -0.000000221605 * x * x * x + 0.000401265632 * x * x - 0.257085878516 * x + 63.199508056832;
+
+
             // Output the final image
             Mat output = inputFrame.rgba();
             Core.flip(output, output, 1);
 
-            Imgproc.putText(output, String.valueOf(heightFromBottom), new Point(50, 500), 0, 3, new Scalar(255, 0, 0), 5, 8, true);
+            Imgproc.putText(output, String.valueOf(distance), new Point(50, 500), 0, 3, new Scalar(255, 0, 0), 5, 8, true);
             Imgproc.putText(output, "LR turn: " + String.valueOf(turn), new Point(50, 400), 0, 2, new Scalar(255, 0, 0), 5, 8, true);
             Imgproc.putText(output, "UD tilt: " + String.valueOf(camera_angle * 180 / Math.PI), new Point(50, 300), 0, 2, new Scalar(255, 0, 0), 5, 8, true);
             Core.flip(output, output, 0);
@@ -351,6 +358,9 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
             for (int i = 0; i < prunedPoly.size(); i++) {
                 Imgproc.drawContours(output, prunedPoly, i, new Scalar(0, 0, 255),5,8,hierarchy,0, new Point(0,0));
             }
+
+            delta_time = System.currentTimeMillis() - startTime;
+
             return output;
         }
         Core.flip(rgba, rgba, 1);
