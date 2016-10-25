@@ -46,6 +46,7 @@ public class Server implements Runnable {
                         old_turn = MainActivity.turn;
                         old_time = MainActivity.delta_time;
                         outToClient.writeBytes(clientSentence + '\n');
+                        Log.d("Server","Sent " +  clientSentence + " to client");
                     }
                 }
             } catch (IOException e) {
